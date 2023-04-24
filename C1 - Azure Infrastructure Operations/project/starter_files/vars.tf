@@ -58,14 +58,17 @@ variable "packerImageResouceGroup" {
   default = "AzureDevOps_NghiLe"
 }
 
-#variable "myTags" {
-#   description = "This project's tags"
-#   default = "nghile-course1"
-#   tags        = {
-#   project = "course1-NghiLe"
-#   }
-# }
+
 variable "subscription_id" {
   description = "The subscription ID of your Azure Account"
   default = "123456"
+}
+
+variable "tags" {
+  description = "Tags to apply to resources"
+  type        = map(string)
+  default     = {
+    Env = "Test"
+    Owner       = "Nghi Le"
+  }
 }

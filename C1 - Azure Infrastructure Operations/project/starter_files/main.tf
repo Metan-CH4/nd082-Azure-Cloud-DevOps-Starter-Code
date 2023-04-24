@@ -17,135 +17,27 @@ provider "azurerm" {
 resource "azurerm_resource_group" "main" {
   name     = "${var.prefix}"
   location = var.location
+
+  tags = var.tags
 }
 
-
-# resource "azurerm_policy_definition" "tagging_policy" {
-#   name         = "tagging-policy"
-#   display_name = "Tagging Policy"
-#   description  = "Enforce tagging policy on resources"
-#   policy_type  = "Custom"
-#   mode         = "Indexed"
-
-#   metadata = <<METADATA
-#     {
-#       "category": "Tags",
-#       "version": "1.0.0"
-#     }
-#   METADATA
-
-#   policy_rule = <<POLICYRULE
-#     {
-#       "if": {
-#       "anyOf": [
-#         {
-#           "field": "tags",
-#           "exists": "false"
-#         },
-#         {
-#           "field": "tags",
-#           "equals": ""
-#         },
-#         {
-#           "field": "tags",
-#           "equals": "{}"
-#         }
-#       ]
-#       },
-#       "then": {
-#         "effect": "deny"
-#       }
-#     }
-#   POLICYRULE
-#   # parameters           = <<PARAMETERS
-#   #   {
-#   #    "tagName": {
-#   #       "type": "String",
-#   #       "value": "Project",
-#   #       "metadata": {
-#   #           "description": "Name of the tag, such as costCenter"
-#   #       }
-#   #     },
-#   #     "tagValue": {
-#   #       "type": "String",
-#   #       "value": "Course1-Udacity",
-#   #       "metadata": {
-#   #           "description": "Value of the tag, such as headquarter"
-#   #       }
-#   #     }
-#   #   }
-#   # PARAMETERS
-# }
-# resource "azurerm_subscription_policy_assignment" "tagging_policy_assignment" {
-#   name                 = "tagging-policy-assignment"
-#   display_name         = "Tagging Policy Assignment"
-#   policy_definition_id = azurerm_policy_definition.tagging_policy.id
-#   subscription_id      = "/subscriptions/${var.subscription_id}"
-#   description          = "Enforce tagging policy on subscription"
-#   # parameters           = <<PARAMETERS
-#   #   {
-#   #     "tagName": {
-#   #       "value": "Project"
-#   #     },
-#   #     "tagValue": {
-#   #       "value": "Course1-Udacity"
-#   #     }
-#   #   }
-#   # PARAMETERS
-# }
-
-#trigger the policy scan
-# resource "null_resource" "trigger_policy_compliance_scan" {
-#   provisioner "local-exec" {
-#     command = "az rest --method post --uri https://management.azure.com/subscriptions/${var.subscription_id}/resourceGroups/${var.prefix}/providers/Microsoft.PolicyInsights/policyStates/latest/triggerEvaluation?api-version=2019-10-01"
-#   }
-
-#   depends_on = [azurerm_resource_group.main]
-# }
-# resource "null_resource" "example" {
-#   provisioner "local-exec" {
-#     # command = "az policy state trigger-scan --policy-assignment ${azurerm_subscription_policy_assignment.tagging_policy_assignment.id}"
-#     command = "az policy state trigger-scan --resource-group ${azurerm_resource_group.main.name}"
-#   }
-# }
 
 resource "azurerm_virtual_network" "main" {
   name                = "${var.prefix}-network"
-  #resize VNet
   address_space       = ["${var.address_space}"]
   location            = azurerm_resource_group.main.location
   resource_group_name = azurerm_resource_group.main.name
+
+   tags = var.tags
 }
 
 #add NSG definition
-
 resource "azurerm_network_security_group" "nsg" {
   name                = "${var.prefix}-nsg"
   location            = azurerm_resource_group.main.location
   resource_group_name = azurerm_resource_group.main.name
 
-#   security_rule {
-#     name                       = "allow-rdp"
-#     priority                   = 200
-#     direction                  = "Inbound"
-#     access                     = "Allow"
-#     protocol                   = "Tcp"
-#     source_port_range          = "*"
-#     destination_port_range     = "3389"
-#     source_address_prefix      = "*"
-#     destination_address_prefix = "*"
-#   }
-#   security_rule {
-#     name                       = "allow-ssh"
-#     priority                   = 220
-#     direction                  = "Inbound"
-#     access                     = "Allow"
-#     protocol                   = "Tcp"
-#     source_port_range          = "*"
-#     destination_port_range     = "22"
-#     source_address_prefix      = "*"
-#     destination_address_prefix = "*"
-#   }
+
 
     security_rule {
     name                       = "allow-internal-communication"
@@ -169,19 +61,8 @@ resource "azurerm_network_security_group" "nsg" {
     source_address_prefix      = "*"
     destination_address_prefix = azurerm_subnet.internal.address_prefixes[0]
   }
-  #   security_rule {
-  #   name                       = "allow-access-lb"
-  #   priority                   = 240
-  #   direction                  = "Inbound"
-  #   access                     = "Allow"
-  #   protocol                   = "Tcp"
-  #   source_port_range          = "*"
-  #   source_address_prefix      = "*"
-  #   # destination_address_prefix  = azurerm_lb.main.frontend_ip_configuration.0.public_ip_address_id
-  #   destination_address_prefix  = azurerm_public_ip.main.id
-  #   destination_port_range     = "*"
-    
-  # }
+
+   tags = var.tags
 }
 
 
@@ -190,13 +71,14 @@ resource "azurerm_subnet" "internal" {
   resource_group_name  = azurerm_resource_group.main.name
   virtual_network_name = azurerm_virtual_network.main.name
   address_prefixes     = ["${var.subnet_space}"]
-  # network_security_group_id = azurerm_network_security_group.nsg.id
 }
 
 # add NSG association
 resource "azurerm_subnet_network_security_group_association" "sample" {
   subnet_id                 = azurerm_subnet.internal.id
   network_security_group_id = azurerm_network_security_group.nsg.id
+
+
 }
 
 resource "azurerm_public_ip" "main" {
@@ -205,9 +87,7 @@ resource "azurerm_public_ip" "main" {
   location            = azurerm_resource_group.main.location
   allocation_method   = "Static"
 
-  tags = {
-    environment = "Test"
-  }
+   tags = var.tags
 }
 
 #add LB definition
@@ -220,12 +100,14 @@ resource "azurerm_public_ip" "main" {
      name                 = "publicIPAddress"
      public_ip_address_id = azurerm_public_ip.main.id
    }
+   tags = var.tags
  }
 
 #add BE pool
  resource "azurerm_lb_backend_address_pool" "main" {
    loadbalancer_id     = azurerm_lb.main.id
    name                = "${var.prefix}-BackEndAddressPool"
+
  }
 
 resource "azurerm_network_interface" "main" {
@@ -238,8 +120,9 @@ resource "azurerm_network_interface" "main" {
     name                          = "internal"
     subnet_id                     = azurerm_subnet.internal.id
     private_ip_address_allocation = "Dynamic"
-    # public_ip_address_id = azurerm_public_ip.main.id
   }
+
+   tags = var.tags
 }
 
 #add VMAS
@@ -251,6 +134,8 @@ resource "azurerm_network_interface" "main" {
    platform_fault_domain_count  = "${var.faultDomain}"
    platform_update_domain_count = "${var.updateDomain}"
    managed                      = true
+
+   tags = var.tags
  }
 
 #add Azure Image from Packer 
@@ -271,27 +156,16 @@ resource "azurerm_linux_virtual_machine" "main" {
   admin_username                  = "${var.username}"
   admin_password                  = "${var.password}"
   disable_password_authentication = false
-  # network_interface_ids = [
-  #   azurerm_network_interface.main.id,
-  # ]
   network_interface_ids = [element(azurerm_network_interface.main.*.id, count.index)]
 
   source_image_id = data.azurerm_image.myImage.id
-  # source_image_reference {
-  #   # publisher = "Canonical"
-  #   # offer     = "UbuntuServer"
-  #   # sku       = "18.04-LTS"
-  #   # version   = "latest"
-  #   source_image_id = data.azurerm_image.myImage.id
 
   os_disk {
     storage_account_type = "Standard_LRS"
     caching              = "ReadWrite"
   }
-  # tags        = {
-  # project = "course1-NghiLe"
-  # }
 
+   tags = var.tags
 }
 
 #add Managed Disk
@@ -303,6 +177,8 @@ resource "azurerm_linux_virtual_machine" "main" {
    storage_account_type = "Standard_LRS"
    create_option        = "Empty"
    disk_size_gb         = 10
+
+   tags = var.tags
  }
 
 #add Managed Disk Attachment
@@ -312,5 +188,6 @@ resource "azurerm_virtual_machine_data_disk_attachment" "diskattach" {
   virtual_machine_id = element(azurerm_linux_virtual_machine.main.*.id, count.index)
   lun                = "1"
   caching            = "ReadWrite"
+
 }
 
