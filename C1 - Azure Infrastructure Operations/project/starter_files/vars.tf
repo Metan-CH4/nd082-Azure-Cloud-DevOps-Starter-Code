@@ -72,3 +72,8 @@ variable "tags" {
     Owner       = "Nghi Le"
   }
 }
+
+variable "app_port" {
+  description = "The port for the LB front end and back end"
+  default = 80
+}

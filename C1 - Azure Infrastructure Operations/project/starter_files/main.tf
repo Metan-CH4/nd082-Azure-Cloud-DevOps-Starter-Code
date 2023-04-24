@@ -15,7 +15,7 @@ provider "azurerm" {
 }
 
 resource "azurerm_resource_group" "main" {
-  name     = "${var.prefix}"
+  name     = "${var.prefix}-rg"
   location = var.location
 
   tags = var.tags
@@ -31,40 +31,6 @@ resource "azurerm_virtual_network" "main" {
    tags = var.tags
 }
 
-#add NSG definition
-resource "azurerm_network_security_group" "nsg" {
-  name                = "${var.prefix}-nsg"
-  location            = azurerm_resource_group.main.location
-  resource_group_name = azurerm_resource_group.main.name
-
-
-
-    security_rule {
-    name                       = "allow-internal-communication"
-    priority                   = 230
-    direction                  = "Inbound"
-    access                     = "Allow"
-    protocol                   = "*"
-    source_port_range          = "*"
-    destination_port_range     = "*"
-    source_address_prefix      = azurerm_subnet.internal.address_prefixes[0]
-    destination_address_prefix = azurerm_subnet.internal.address_prefixes[0]
-  }
-  security_rule {
-    name                       = "deny-internet-inbound"
-    priority                   = 240
-    direction                  = "Inbound"
-    access                     = "Deny"
-    protocol                   = "*"
-    source_port_range          = "*"
-    destination_port_range     = "*"
-    source_address_prefix      = "*"
-    destination_address_prefix = azurerm_subnet.internal.address_prefixes[0]
-  }
-
-   tags = var.tags
-}
-
 
 resource "azurerm_subnet" "internal" {
   name                 = "${var.prefix}-subnet"
@@ -73,13 +39,6 @@ resource "azurerm_subnet" "internal" {
   address_prefixes     = ["${var.subnet_space}"]
 }
 
-# add NSG association
-resource "azurerm_subnet_network_security_group_association" "sample" {
-  subnet_id                 = azurerm_subnet.internal.id
-  network_security_group_id = azurerm_network_security_group.nsg.id
-
-
-}
 
 resource "azurerm_public_ip" "main" {
   name                = "publicIpForLB"
@@ -109,6 +68,87 @@ resource "azurerm_public_ip" "main" {
    name                = "${var.prefix}-BackEndAddressPool"
 
  }
+
+#add LB probe
+resource "azurerm_lb_probe" "main" {
+  name            = "${var.prefix}-lb-probe"
+  loadbalancer_id = azurerm_lb.main.id
+  port            = var.app_port
+}
+
+#add LB rule
+resource "azurerm_lb_rule" "main" {
+  name                           = "${var.prefix}-lb-rule"
+  loadbalancer_id                = azurerm_lb.main.id
+  protocol                       = "Tcp"
+  probe_id                       = azurerm_lb_probe.main.id
+  frontend_port                  = var.app_port
+  backend_port                   = var.app_port
+  backend_address_pool_ids       = [azurerm_lb_backend_address_pool.main.id]
+  frontend_ip_configuration_name = azurerm_lb.main.frontend_ip_configuration[0].name
+}
+
+#add NSG definition
+resource "azurerm_network_security_group" "nsg" {
+  name                = "${var.prefix}-nsg"
+  location            = azurerm_resource_group.main.location
+  resource_group_name = azurerm_resource_group.main.name
+
+    security_rule {
+    name                       = "allow-internal-inbound"
+    priority                   = 200
+    direction                  = "Inbound"
+    access                     = "Allow"
+    protocol                   = "*"
+    source_port_range          = "*"
+    destination_port_range     = "*"
+    source_address_prefix      = "VirtualNetwork"
+    destination_address_prefix = "VirtualNetwork"
+  }
+
+    security_rule {
+    name                       = "allow-internal-outbound"
+    priority                   = 220
+    direction                  = "Outbound"
+    access                     = "Allow"
+    protocol                   = "*"
+    source_port_range          = "*"
+    destination_port_range     = "*"
+    source_address_prefix      = "VirtualNetwork"
+    destination_address_prefix = "VirtualNetwork"
+  }
+    security_rule {
+    name                       = "allow-internet-LB"
+    priority                   = 300
+    direction                  = "Inbound"
+    access                     = "Allow"
+    protocol                   = "*"
+    source_port_range          = "*"
+    destination_port_range     = "${var.app_port}"
+    source_address_prefix      = "Internet"
+    destination_address_prefix = azurerm_public_ip.main.ip_address
+  }
+  security_rule {
+    name                       = "deny-internet-inbound"
+    priority                   = 400
+    direction                  = "Inbound"
+    access                     = "Deny"
+    protocol                   = "*"
+    source_port_range          = "*"
+    destination_port_range     = "*"
+    source_address_prefix      = "Internet"
+    destination_address_prefix = "VirtualNetwork"
+  }
+
+   tags = var.tags
+}
+# add NSG association
+resource "azurerm_subnet_network_security_group_association" "sample" {
+  subnet_id                 = azurerm_subnet.internal.id
+  network_security_group_id = azurerm_network_security_group.nsg.id
+
+
+}
 
 resource "azurerm_network_interface" "main" {
   count              = "${var.numberOfVMs}"
@@ -151,7 +191,6 @@ resource "azurerm_linux_virtual_machine" "main" {
   availability_set_id             = azurerm_availability_set.myVmas.id
   resource_group_name             = azurerm_resource_group.main.name
   location                        = azurerm_resource_group.main.location
-  # size                            = "Standard_D2s_v3"
   size                            = "Standard_B1s"
   admin_username                  = "${var.username}"
   admin_password                  = "${var.password}"
